@@ -1,10 +1,8 @@
 package cmd
 
 import (
-	"fmt"
 	"github.com/spf13/cobra"
 	"github.com/udayfs/rdv/utils"
-	"os"
 )
 
 var (
@@ -20,14 +18,15 @@ var rootCmd = &cobra.Command{
 	CompletionOptions: cobra.CompletionOptions{
 		DisableDefaultCmd: true,
 	},
-	Version: utils.Version,
+	SilenceUsage:  true,
+	SilenceErrors: true,
+	Version:       utils.Version,
 }
 
 func Execute() {
 	err := rootCmd.Execute()
 	if err != nil {
-		fmt.Println(utils.Colorize(utils.Red, "[Error] "), err.Error())
-		os.Exit(1)
+		utils.ExitOnError(utils.Colorize(utils.Red, "[Error] "), err.Error())
 	}
 }
 

@@ -2,8 +2,8 @@ package cmd
 
 import (
 	"fmt"
-
 	"github.com/spf13/cobra"
+	"github.com/udayfs/rdv/utils"
 )
 
 var fetchCmd = &cobra.Command{
@@ -11,15 +11,17 @@ var fetchCmd = &cobra.Command{
 	Short:                 "fetch a file or directory",
 	Long:                  "fetch a file or directory",
 	DisableFlagsInUseLine: true,
-	RunE: func(cmd *cobra.Command, args []string) error {
+	Run: func(cmd *cobra.Command, args []string) {
 
 		if (file == "" && dir == "") || (file != "" && dir != "") {
-			return fmt.Errorf("you must provide either -f (file) or -d (directory), but not both")
+			utils.ExitOnError("you must provide either -f (file) or -d (directory), but not both")
 		}
 
+		if err := utils.ClearScreen(); err != nil {
+			utils.ExitOnError(err.Error())
+		}
+		fmt.Println(utils.Colorize(utils.Green, "[Info]"), "Fetching", file)
 		// fetch logic
-
-		return nil
 	},
 }
 

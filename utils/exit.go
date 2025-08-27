@@ -5,7 +5,7 @@ import (
 	"os"
 )
 
-func ExitOnError(message ...string) {
-	fmt.Fprintln(os.Stderr, message)
+func ExitOnError(message string) {
+	fmt.Fprintf(os.Stderr, "%s\n", message)
 	os.Exit(1)
 }

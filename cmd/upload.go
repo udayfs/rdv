@@ -20,7 +20,7 @@ var uploadCmd = &cobra.Command{
 		if err := utils.ClearScreen(); err != nil {
 			utils.ExitOnError(err.Error())
 		}
-		fmt.Println(utils.Colorize(utils.Green, "[Info]"), "Uploading", file)
+		fmt.Println(utils.Colorize(utils.Gray, "[Info]"), "Uploading", file)
 		// upload logic
 
 	},

@@ -20,7 +20,8 @@ var fetchCmd = &cobra.Command{
 		if err := utils.ClearScreen(); err != nil {
 			utils.ExitOnError(err.Error())
 		}
-		fmt.Println(utils.Colorize(utils.Green, "[Info]"), "Fetching", file)
+		fmt.Println(utils.Colorize(utils.Gray, "[Info]"), "Fetching", file)
+		utils.Start()
 		// fetch logic
 	},
 }

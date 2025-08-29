@@ -26,15 +26,15 @@ const (
 
 var (
 	redirectURL string = fmt.Sprintf("http://localhost:%s/callback", port)
+	userHome, _        = os.UserHomeDir()
+	oauthConfig        = &oauth2.Config{
+		ClientID:     clientID,
+		ClientSecret: clientNonsecret,
+		Endpoint:     google.Endpoint,
+		Scopes:       []string{drive.DriveFileScope},
+		RedirectURL:  redirectURL,
+	}
 )
-
-var oauthConfig = &oauth2.Config{
-	ClientID:     clientID,
-	ClientSecret: clientNonsecret,
-	Endpoint:     google.Endpoint,
-	Scopes:       []string{drive.DriveFileScope},
-	RedirectURL:  redirectURL,
-}
 
 func generateRandomBytes(len int) (string, error) {
 	b := make([]byte, len)
@@ -70,12 +70,11 @@ func buildToken(tokenData map[string]string) (*oauth2.Token, error) {
 }
 
 func saveToken(token *oauth2.Token) error {
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		return err
+	if userHome == "" {
+		return os.ErrNotExist
 	}
 
-	tokenJSON := filepath.Join(homeDir, tokenFile)
+	tokenJSON := filepath.Join(userHome, tokenFile)
 	tokenData := map[string]string{
 		"access_token":  token.AccessToken,
 		"refresh_token": token.RefreshToken,
@@ -154,12 +153,11 @@ func authorize() error {
 
 func LogIn() (*http.Client, error) {
 	tokenData := make(map[string]string)
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		return nil, err
+	if userHome == "" {
+		return nil, os.ErrNotExist
 	}
 
-	file, err := os.Open(filepath.Join(homeDir, tokenFile))
+	file, err := os.Open(filepath.Join(userHome, tokenFile))
 	if err == nil {
 		defer file.Close()
 		if err := json.NewDecoder(file).Decode(&tokenData); err == nil {
@@ -174,7 +172,7 @@ func LogIn() (*http.Client, error) {
 		return nil, err
 	}
 
-	file, err = os.Open(filepath.Join(homeDir, tokenFile))
+	file, err = os.Open(filepath.Join(userHome, tokenFile))
 	if err != nil {
 		return nil, err
 	}

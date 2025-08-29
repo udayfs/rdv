@@ -12,19 +12,17 @@ var (
 )
 
 var rootCmd = &cobra.Command{
-	Use:   "rdv",
-	Short: "Access your cloud drive storage from the terminal!",
-	Long:  "rdv (Remote Drive View) is a cli tool that can fetch and upload files and directories to the specified drive.",
-	CompletionOptions: cobra.CompletionOptions{
-		DisableDefaultCmd: true,
-	},
-	SilenceErrors: true,
-	Version:       utils.Version,
+	Use:               "rdv",
+	Short:             "Access your cloud drive storage from the terminal!",
+	Long:              "rdv (Remote Drive View) is a cli tool that can fetch and upload files and directories to the specified drive.",
+	SilenceErrors:     true,
+	Version:           utils.Version,
+	CompletionOptions: cobra.CompletionOptions{DisableDefaultCmd: true},
 }
 
 func Execute() {
 	if err := rootCmd.Execute(); err != nil {
-		utils.ExitOnError(utils.Colorize(utils.Red, "[Error] ") + err.Error())
+		utils.ExitOnError(err.Error())
 	}
 }
 

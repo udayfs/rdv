@@ -22,7 +22,6 @@ var uploadCmd = &cobra.Command{
 		}
 		fmt.Println(utils.Colorize(utils.Gray, "[Info]"), "Uploading", file)
 		// upload logic
-
 	},
 }
 

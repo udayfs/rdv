@@ -7,14 +7,13 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"golang.org/x/oauth2"
+	"golang.org/x/oauth2/google"
+	"google.golang.org/api/drive/v3"
 	"net/http"
 	"os"
 	"path/filepath"
 	"time"
-
-	"golang.org/x/oauth2"
-	"golang.org/x/oauth2/google"
-	"google.golang.org/api/drive/v3"
 )
 
 const (

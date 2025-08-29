@@ -6,6 +6,6 @@ import (
 )
 
 func ExitOnError(message string) {
-	fmt.Fprintf(os.Stderr, "%s\n", message)
+	fmt.Fprintf(os.Stderr, "%s\n", Colorize(Red, "[Error] ")+message)
 	os.Exit(1)
 }

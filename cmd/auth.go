@@ -15,11 +15,10 @@ var authCmd = &cobra.Command{
 		if err := utils.ClearScreen(); err != nil {
 			utils.ExitOnError(err.Error())
 		}
-		
-		utils.LogIn()
 	},
 }
 
 func init() {
+	authCmd.Flags().BoolP("revoke", "r", false, "revokes existing logged in user session")
 	rootCmd.AddCommand(authCmd)
 }

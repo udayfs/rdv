@@ -21,7 +21,6 @@ var fetchCmd = &cobra.Command{
 			utils.ExitOnError(err.Error())
 		}
 		fmt.Println(utils.Colorize(utils.Gray, "[Info]"), "Fetching", file)
-		utils.Start()
 		// fetch logic
 	},
 }

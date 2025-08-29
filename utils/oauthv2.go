@@ -5,20 +5,44 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
+	"net/http"
+	"os"
+	"path/filepath"
+	"time"
+
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 	"google.golang.org/api/drive/v3"
-	"net/http"
 )
 
-const client_id string = "593200518603-k0ptna6taq593eiulqnd4vfsk1djh0vl.apps.googleusercontent.com"
+const (
+	// https://developers.google.com/identity/protocols/oauth2/#installed
+	clientNonsecret string = "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"
+	clientID        string = "593200518603-k0ptna6taq593eiulqnd4vfsk1djh0vl.apps.googleusercontent.com"
+	port            string = "8008"
+	tokenFile       string = ".rdv_user.json"
+)
 
-// https://developers.google.com/identity/protocols/oauth2/#installed
-const client_nonsecret string = "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"
+var (
+	redirectURL string = fmt.Sprintf("http://localhost:%s/callback", port)
+)
 
-func LogIn() error {
-	return nil
+var oauthConfig = &oauth2.Config{
+	ClientID:     clientID,
+	ClientSecret: clientNonsecret,
+	Endpoint:     google.Endpoint,
+	Scopes:       []string{drive.DriveFileScope},
+	RedirectURL:  redirectURL,
+}
+
+func generateRandomBytes(len int) (string, error) {
+	b := make([]byte, len)
+	if _, err := rand.Read(b); err != nil || len < 0 {
+		return "", err
+	}
+	return base64.RawURLEncoding.EncodeToString(b), nil
 }
 
 // See: https://developers.google.com/identity/protocols/oauth2/native-app#step1-code-verifier
@@ -33,23 +57,48 @@ func pkce() (string, string, error) {
 	return codeVerifier, codeChallenge, nil
 }
 
-func generateRandomBytes(len int) (string, error) {
-	b := make([]byte, len)
-	if _, err := rand.Read(b); err != nil || len < 0 {
-		return "", err
+func buildToken(tokenData map[string]string) (*oauth2.Token, error) {
+	expiry, err := time.Parse("2006-01-02T15:04:05Z07:00", tokenData["expiry"])
+	if err != nil {
+		return nil, err
 	}
-	return base64.RawURLEncoding.EncodeToString(b), nil
+	return &oauth2.Token{
+		AccessToken:  tokenData["access_token"],
+		RefreshToken: tokenData["refresh_token"],
+		TokenType:    tokenData["token_type"],
+		Expiry:       expiry,
+	}, nil
 }
 
-func start() error {
-	config := &oauth2.Config{
-		ClientID:     client_id,
-		ClientSecret: client_nonsecret,
-		Endpoint:     google.Endpoint,
-		Scopes:       []string{drive.DriveFileScope},
-		RedirectURL:  "http://localhost:8080/callback",
+func saveToken(token *oauth2.Token) error {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return err
 	}
 
+	tokenJSON := filepath.Join(homeDir, tokenFile)
+	tokenData := map[string]string{
+		"access_token":  token.AccessToken,
+		"refresh_token": token.RefreshToken,
+		"token_type":    token.TokenType,
+		"expiry":        token.Expiry.Format("2006-01-02T15:04:05Z07:00"),
+	}
+
+	file, err := os.Create(tokenJSON)
+	if err != nil {
+		return err
+	}
+
+	jsonEncoder := json.NewEncoder(file)
+	jsonEncoder.SetIndent("", "  ")
+	if err := jsonEncoder.Encode(tokenData); err != nil {
+		return err
+	}
+
+	return file.Close()
+}
+
+func authorize() error {
 	code_verifier, code_challenge, err := pkce()
 
 	if err != nil {
@@ -61,33 +110,86 @@ func start() error {
 		return err
 	}
 
-	authURL := config.AuthCodeURL(state,
+	authURL := oauthConfig.AuthCodeURL(
+		state,
 		oauth2.AccessTypeOffline,
 		oauth2.SetAuthURLParam("code_challenge", code_challenge),
 		oauth2.SetAuthURLParam("code_challenge_method", "S256"))
 
-	// call browser
-	fmt.Println(authURL)
-
-	codeCh := make(chan string)
-	http.HandleFunc("/callback", func(w http.ResponseWriter, r *http.Request) {
-		code := r.URL.Query().Get("code")
-		fmt.Fprintln(w, "Auth complete! You can close this window.")
-		codeCh <- code
-	})
-	go http.ListenAndServe(":8080", nil)
-	code := <-codeCh
-
-	// Exchange with PKCE
-	token, err := config.Exchange(context.Background(), code,
-		oauth2.SetAuthURLParam("code_verifier", code_verifier),
-	)
-	if err != nil {
-		fmt.Println("error:", err.Error())
+	if err := OpenURL(authURL); err != nil {
 		return err
 	}
 
-	fmt.Println("Access Token:", token.AccessToken)
+	codeChn := make(chan string)
+	http.HandleFunc("/callback", func(w http.ResponseWriter, r *http.Request) {
+		query := r.URL.Query()
+		code := query.Get("code")
+		rState := query.Get("state")
 
-	return nil
+		if rState != state {
+			http.Error(w, "Invalid 'state' parameter!", http.StatusBadRequest)
+			codeChn <- ""
+			return
+		}
+
+		fmt.Fprintln(w, "Authorization successful! You can close this window now.")
+		codeChn <- code
+	})
+
+	go func() {
+		http.ListenAndServe(":"+port, nil)
+	}()
+	code := <-codeChn
+
+	// exchange with pkce
+	token, err := oauthConfig.Exchange(context.Background(), code,
+		oauth2.SetAuthURLParam("code_verifier", code_verifier),
+	)
+
+	if err != nil {
+		return err
+	}
+
+	return saveToken(token)
+}
+
+func LogIn() (*http.Client, error) {
+	tokenData := make(map[string]string)
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return nil, err
+	}
+
+	file, err := os.Open(filepath.Join(homeDir, tokenFile))
+	if err == nil {
+		defer file.Close()
+		if err := json.NewDecoder(file).Decode(&tokenData); err == nil {
+			if token, err := buildToken(tokenData); err == nil {
+				client := oauthConfig.Client(context.Background(), token)
+				return client, nil
+			}
+		}
+	}
+
+	if err := authorize(); err != nil {
+		return nil, err
+	}
+
+	file, err = os.Open(filepath.Join(homeDir, tokenFile))
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
+	if err := json.NewDecoder(file).Decode(&tokenData); err != nil {
+		return nil, err
+	}
+
+	token, err := buildToken(tokenData)
+	if err != nil {
+		return nil, err
+	}
+
+	client := oauthConfig.Client(context.Background(), token)
+	return client, nil
 }

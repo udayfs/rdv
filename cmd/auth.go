@@ -15,7 +15,8 @@ var authCmd = &cobra.Command{
 		if err := utils.ClearScreen(); err != nil {
 			utils.ExitOnError(err.Error())
 		}
-		// auth logic
+		
+		utils.LogIn()
 	},
 }
 

@@ -16,25 +16,40 @@ import (
 	"time"
 )
 
-const (
+type OauthProvider struct {
+	name     string
+	clientID string
 	// https://developers.google.com/identity/protocols/oauth2/#installed
-	clientNonsecret string = "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"
-	clientID        string = "593200518603-k0ptna6taq593eiulqnd4vfsk1djh0vl.apps.googleusercontent.com"
-	port            string = "8008"
-	tokenFile       string = ".rdv_user.json"
-)
+	clientSec string
+	scopes    []string
+	endpoint  oauth2.Endpoint
+}
 
 var (
-	redirectURL string = fmt.Sprintf("http://localhost:%s/callback", port)
-	userHome, _        = os.UserHomeDir()
-	oauthConfig        = &oauth2.Config{
-		ClientID:     clientID,
-		ClientSecret: clientNonsecret,
-		Endpoint:     google.Endpoint,
-		Scopes:       []string{drive.DriveFileScope},
-		RedirectURL:  redirectURL,
-	}
+	globalConfig  *oauth2.Config
+	port          string = "8008"
+	redirectURL   string = fmt.Sprintf("http://localhost:%s/callback", port)
+	tokenFileName string = ".rdv.json"
+	tokenFilePath string = filepath.Join(getUserHome(), tokenFileName)
 )
+
+var providers = []OauthProvider{
+	{
+		name:      "google",
+		clientID:  "593200518603-k0ptna6taq593eiulqnd4vfsk1djh0vl.apps.googleusercontent.com",
+		clientSec: "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",
+		endpoint:  google.Endpoint,
+		scopes:    []string{drive.DriveFileScope},
+	},
+}
+
+func getUserHome() string {
+	res, err := os.UserHomeDir()
+	if err != nil {
+		ExitOnError(err.Error())
+	}
+	return res
+}
 
 func generateRandomBytes(len int) (string, error) {
 	b := make([]byte, len)
@@ -56,11 +71,22 @@ func pkce() (string, string, error) {
 	return codeVerifier, codeChallenge, nil
 }
 
-func buildToken(tokenData map[string]string) (*oauth2.Token, error) {
+func getToken(tokenData map[string]string) (*oauth2.Token, error) {
+	file, err := os.Open(tokenFilePath)
+	if err != nil {
+		return nil, err
+	}
+
+	defer file.Close()
+	if err := json.NewDecoder(file).Decode(&tokenData); err != nil {
+		return nil, err
+	}
+
 	expiry, err := time.Parse("2006-01-02T15:04:05Z07:00", tokenData["expiry"])
 	if err != nil {
 		return nil, err
 	}
+
 	return &oauth2.Token{
 		AccessToken:  tokenData["access_token"],
 		RefreshToken: tokenData["refresh_token"],
@@ -69,12 +95,7 @@ func buildToken(tokenData map[string]string) (*oauth2.Token, error) {
 	}, nil
 }
 
-func saveToken(token *oauth2.Token) error {
-	if userHome == "" {
-		return os.ErrNotExist
-	}
-
-	tokenJSON := filepath.Join(userHome, tokenFile)
+func setToken(token *oauth2.Token, tokenFile string) error {
 	tokenData := map[string]string{
 		"access_token":  token.AccessToken,
 		"refresh_token": token.RefreshToken,
@@ -82,30 +103,44 @@ func saveToken(token *oauth2.Token) error {
 		"expiry":        token.Expiry.Format("2006-01-02T15:04:05Z07:00"),
 	}
 
-	file, err := os.Create(tokenJSON)
+	file, err := os.Create(tokenFile)
 	if err != nil {
 		return err
 	}
+	defer file.Close()
 
 	jsonEncoder := json.NewEncoder(file)
 	jsonEncoder.SetIndent("", "  ")
-	if err := jsonEncoder.Encode(tokenData); err != nil {
-		return err
-	}
 
-	return file.Close()
+	return jsonEncoder.Encode(tokenData)
 }
 
-func authorize() error {
+func authorize(provider *OauthProvider) (*http.Client, error) {
+	switch provider.name {
+	case "google":
+	default:
+		return nil, fmt.Errorf("unsupported oauth provider")
+	}
+
+	var oauthConfig = &oauth2.Config{
+		ClientID:     provider.clientID,
+		ClientSecret: provider.clientSec,
+		Endpoint:     provider.endpoint,
+		RedirectURL:  redirectURL,
+		Scopes:       provider.scopes,
+	}
+
+	globalConfig = oauthConfig
+
 	code_verifier, code_challenge, err := pkce()
 
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	state, err := generateRandomBytes(16)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	authURL := oauthConfig.AuthCodeURL(
@@ -115,7 +150,7 @@ func authorize() error {
 		oauth2.SetAuthURLParam("code_challenge_method", "S256"))
 
 	if err := OpenURL(authURL); err != nil {
-		return err
+		return nil, err
 	}
 
 	codeChn := make(chan string)
@@ -123,6 +158,7 @@ func authorize() error {
 		query := r.URL.Query()
 		code := query.Get("code")
 		rState := query.Get("state")
+		defer close(codeChn)
 
 		if rState != state {
 			http.Error(w, "Invalid 'state' parameter!", http.StatusBadRequest)
@@ -143,50 +179,30 @@ func authorize() error {
 	token, err := oauthConfig.Exchange(context.Background(), code,
 		oauth2.SetAuthURLParam("code_verifier", code_verifier),
 	)
-
-	if err != nil {
-		return err
-	}
-
-	return saveToken(token)
-}
-
-func LogIn() (*http.Client, error) {
-	tokenData := make(map[string]string)
-	if userHome == "" {
-		return nil, os.ErrNotExist
-	}
-
-	file, err := os.Open(filepath.Join(userHome, tokenFile))
-	if err == nil {
-		defer file.Close()
-		if err := json.NewDecoder(file).Decode(&tokenData); err == nil {
-			if token, err := buildToken(tokenData); err == nil {
-				client := oauthConfig.Client(context.Background(), token)
-				return client, nil
-			}
-		}
-	}
-
-	if err := authorize(); err != nil {
-		return nil, err
-	}
-
-	file, err = os.Open(filepath.Join(userHome, tokenFile))
 	if err != nil {
 		return nil, err
 	}
-	defer file.Close()
 
-	if err := json.NewDecoder(file).Decode(&tokenData); err != nil {
-		return nil, err
-	}
-
-	token, err := buildToken(tokenData)
-	if err != nil {
+	if err := setToken(token, tokenFilePath); err != nil {
 		return nil, err
 	}
 
 	client := oauthConfig.Client(context.Background(), token)
 	return client, nil
+}
+
+func LogIn() (*http.Client, error) {
+	tokenData := make(map[string]string)
+
+	if token, err := getToken(tokenData); err == nil {
+		return globalConfig.Client(context.Background(), token), nil
+	}
+
+	// only google for now
+	client, err := authorize(&providers[0])
+	if err != nil {
+		return nil, err
+	}
+
+	return client, err
 }

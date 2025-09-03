@@ -11,17 +11,30 @@ var fetchCmd = &cobra.Command{
 	Short:                 "fetch a file or directory",
 	Long:                  "fetch a file or directory",
 	DisableFlagsInUseLine: true,
-	Run: func(cmd *cobra.Command, args []string) {
-
+	Aliases:               []string{"get"},
+	PreRun: func(cmd *cobra.Command, args []string) {
 		if (file == "" && dir == "") || (file != "" && dir != "") {
-			utils.ExitOnError("you must provide either -f (file) or -d (directory), but not both")
+			utils.ExitOnError("You must provide either -f (file) or -d (directory), but not both")
 		}
-
 		if err := utils.ClearScreen(); err != nil {
 			utils.ExitOnError(err.Error())
 		}
+	},
+	Run: func(cmd *cobra.Command, args []string) {
 		fmt.Println(utils.Colorize(utils.Gray, "[Info]"), "Fetching", file)
-		// fetch logic
+		fields, err := srv.Files.List().Do()
+		if err != nil {
+			utils.ExitOnError(err.Error())
+		}
+
+		fmt.Println("Files:")
+		if len(fields.Files) == 0 {
+			fmt.Println("No files found.")
+		} else {
+			for _, i := range fields.Files {
+				fmt.Println(i)
+			}
+		}
 	},
 }
 

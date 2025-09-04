@@ -10,8 +10,7 @@ var authCmd = &cobra.Command{
 	Short:                 "authenticate a drive user",
 	Long:                  "authenticate a drive user",
 	DisableFlagsInUseLine: true,
-	Run: func(cmd *cobra.Command, args []string) {
-
+	PreRun: func(cmd *cobra.Command, args []string) {
 		if err := utils.ClearScreen(); err != nil {
 			utils.ExitOnError(err.Error())
 		}

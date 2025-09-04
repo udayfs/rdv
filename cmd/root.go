@@ -9,10 +9,12 @@ import (
 )
 
 var (
-	file   string
-	dir    string
-	outDir string
-	srv    *drive.Service
+	file     string
+	dir      string
+	outDir   string
+	parent   string
+	parentID string
+	srv      *drive.Service
 )
 
 var rootCmd = &cobra.Command{

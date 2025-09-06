@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-func Spinner[T any](f func() (T, error), message string) (T, error) {
+func Spinner[T any](fn func() (T, error), message string) (T, error) {
 	done := make(chan any)
 
 	go func() {
@@ -24,7 +24,7 @@ func Spinner[T any](f func() (T, error), message string) (T, error) {
 		}
 	}()
 
-	res, err := f()
+	res, err := fn()
 	done <- res
 	return res, err
 }

@@ -21,21 +21,22 @@ func Colorize(color, text string) string {
 
 func ClearScreen() error {
 	var err error
+	var cmd *exec.Cmd
 
 	switch runtime.GOOS {
 	case "linux", "darwin", "freebsd":
-		cmd := exec.Command("clear")
-		cmd.Stderr = os.Stderr
-		cmd.Stdout = os.Stdout
-		err = cmd.Run()
+		cmd = exec.Command("clear")
 	case "windows":
-		cmd := exec.Command("cmd", "/c", "cls")
-		cmd.Stderr = os.Stderr
-		cmd.Stdout = os.Stdout
-		err = cmd.Run()
+		cmd = exec.Command("cmd", "/c", "cls")
 	default:
 		err = fmt.Errorf("unsupported OS")
 	}
 
-	return err
+	if err != nil {
+		return err
+	}
+
+	cmd.Stderr = os.Stderr
+	cmd.Stdout = os.Stdout
+	return cmd.Run()
 }

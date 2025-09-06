@@ -7,7 +7,7 @@ import (
 
 func ExitOnError(message string) {
 	fmt.Fprintf(os.Stderr, "%s\n", Colorize(Red, "[Error] ")+message)
-	os.Exit(0)
+	os.Exit(1)
 }
 
 func ExitOnSuccess(message string) {

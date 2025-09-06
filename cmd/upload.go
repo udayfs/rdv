@@ -20,9 +20,9 @@ var uploadCmd = &cobra.Command{
 		}
 
 		if parent != "" {
-			q := fmt.Sprintf("mimeType = 'application/vnd.google-apps.folder' and name = '%s' and trashed = false", parent)
+			q := fmt.Sprintf("mimeType='application/vnd.google-apps.folder' and name ='%s' and 'root' in parents and trashed=false", parent)
 			res, err := srv.Files.List().Q(q).Fields("files(id, name)").Do()
-
+			fmt.Println(res, q)
 			if err != nil || len(res.Files) == 0 {
 				utils.ExitOnError("Unable to find the parent folder: " + parent)
 			}
@@ -35,32 +35,29 @@ var uploadCmd = &cobra.Command{
 		}
 	},
 	Run: func(cmd *cobra.Command, args []string) {
-		if file != "" {
-			f, err := os.Open(file)
-			if err != nil {
-				utils.ExitOnError(err.Error())
-			}
-			defer f.Close()
+		var isDir bool
+		var path string
+		var message string
 
-			filename := filepath.Base(file)
-			if filename == "." || filename == "/" || filename == "\\" {
-				utils.ExitOnError("Invalid file name or path")
-			}
-
-			driveFile := &drive.File{Name: filename}
-			if parentID != "" {
-				driveFile.Parents = []string{parentID}
-			}
-
-			uploadedFile, err := utils.Spinner(func() (*drive.File, error) {
-				return srv.Files.Create(driveFile).Media(f).Do()
-			}, "Uploading "+filename)
-
-			if err != nil {
-				utils.ExitOnError("Unable to upload file: " + err.Error())
-			}
-			utils.ExitOnSuccess("File uploaded successfully: " + uploadedFile.Name)
+		if file == "" {
+			isDir = true
+			path = dir
+			message = fmt.Sprintf("Uploading directory %s", filepath.Base(dir))
+		} else {
+			isDir = false
+			path = file
+			message = fmt.Sprintf("Uploading file %s", filepath.Base(file))
 		}
+
+		_, err := utils.Spinner(func() (struct{}, error) {
+			return struct{}{}, upload(path, isDir, parentID)
+		}, message)
+		
+		if err != nil {
+			utils.ExitOnError("Unable to complete the upload operation: " + err.Error())
+		}
+
+		utils.ExitOnSuccess("Upload operation for " + path + " successfully completed!")
 	},
 }
 
@@ -69,4 +66,85 @@ func init() {
 	uploadCmd.Flags().StringVarP(&dir, "dir", "d", "", "directory to upload")
 	uploadCmd.Flags().StringVarP(&parent, "parent", "p", "", "parent folder name for the uploaded file in the drive")
 	rootCmd.AddCommand(uploadCmd)
+}
+
+func upload(path string, isDir bool, parentDirId string) error {
+	var err error
+
+	if isDir {
+		err = uploadDriveFolderRec(path, parentDirId)
+	} else {
+		err = uploadDriveFile(path, parentDirId)
+	}
+
+	return err
+}
+
+func uploadDriveFile(file string, parentId string) error {
+	f, err := os.Open(file)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	filename := filepath.Base(filepath.Clean(file))
+	if filename == "/" || filename == "\\" {
+		return fmt.Errorf("invalid file name or path")
+	}
+
+	driveFile := &drive.File{Name: filename}
+	if parentId != "" {
+		driveFile.Parents = []string{parentId}
+	}
+
+	_, err = srv.Files.Create(driveFile).Media(f).Do()
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func createDriveFolder(dir string, parentId string) (string, error) {
+	dirname := filepath.Base(filepath.Clean(dir))
+
+	driveFolder := &drive.File{
+		Name:     dirname,
+		MimeType: "application/vnd.google-apps.folder",
+	}
+	if parentId != "" {
+		driveFolder.Parents = []string{parentId}
+	}
+	createdFolder, err := srv.Files.Create(driveFolder).Do()
+
+	if err != nil {
+		return "", err
+	}
+
+	return createdFolder.Id, nil
+}
+
+func uploadDriveFolderRec(dir string, parentId string) error {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return err
+	}
+
+	folderId, err := createDriveFolder(dir, parentId)
+	if err != nil {
+		return err
+	}
+
+	for _, entry := range entries {
+		fullpath := filepath.Join(dir, entry.Name())
+		if entry.IsDir() {
+			err = uploadDriveFolderRec(fullpath, folderId)
+		} else {
+			err = uploadDriveFile(fullpath, folderId)
+		}
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }

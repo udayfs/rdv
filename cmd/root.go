@@ -33,6 +33,7 @@ func Execute() {
 
 func init() {
 	rootCmd.SilenceErrors = true
+	ctx := context.Background()
 
 	// only google for now
 	client, err := utils.LogIn(utils.Providers[0])
@@ -40,7 +41,7 @@ func init() {
 		utils.ExitOnError(err.Error())
 	}
 
-	srv, err = drive.NewService(context.Background(), option.WithHTTPClient(client))
+	srv, err = drive.NewService(ctx, option.WithHTTPClient(client))
 	if err != nil {
 		utils.ExitOnError("Unable to retrieve Drive client: " + err.Error())
 	}

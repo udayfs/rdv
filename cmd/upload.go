@@ -13,16 +13,21 @@ var uploadCmd = &cobra.Command{
 	Use:                   "upload [-f file | -d directory]",
 	Short:                 "uploads a file or directory to the drive",
 	Long:                  "uploads a file or directory to the drive",
+	Aliases:               []string{"set"},
 	DisableFlagsInUseLine: true,
 	PreRun: func(cmd *cobra.Command, args []string) {
+		err := auth()
+		if err != nil {
+			utils.ExitOnError("Authorization error: " + err.Error())
+		}
+
 		if (file == "" && dir == "") || (file != "" && dir != "") {
 			utils.ExitOnError("You must provide either -f (file) or -d (directory), but not both")
 		}
 
 		if parent != "" {
-			q := fmt.Sprintf("mimeType='application/vnd.google-apps.folder' and name ='%s' and 'root' in parents and trashed=false", parent)
+			q := fmt.Sprintf("mimeType='application/vnd.google-apps.folder' and name='%s' and 'root' in parents and trashed=false", parent)
 			res, err := srv.Files.List().Q(q).Fields("files(id, name)").Do()
-			fmt.Println(res, q)
 			if err != nil || len(res.Files) == 0 {
 				utils.ExitOnError("Unable to find the parent folder: " + parent)
 			}
@@ -30,7 +35,7 @@ var uploadCmd = &cobra.Command{
 			parentID = res.Files[0].Id
 		}
 
-		if err := utils.ClearScreen(); err != nil {
+		if err = utils.ClearScreen(); err != nil {
 			utils.ExitOnError(err.Error())
 		}
 	},
@@ -52,19 +57,19 @@ var uploadCmd = &cobra.Command{
 		_, err := utils.Spinner(func() (struct{}, error) {
 			return struct{}{}, upload(path, isDir, parentID)
 		}, message)
-		
+
 		if err != nil {
 			utils.ExitOnError("Unable to complete the upload operation: " + err.Error())
 		}
 
-		utils.ExitOnSuccess("Upload operation for " + path + " successfully completed!")
+		utils.ExitOnSuccess("Upload operation for " + filepath.Base(path) + " successfully completed!")
 	},
 }
 
 func init() {
 	uploadCmd.Flags().StringVarP(&file, "file", "f", "", "file to upload")
 	uploadCmd.Flags().StringVarP(&dir, "dir", "d", "", "directory to upload")
-	uploadCmd.Flags().StringVarP(&parent, "parent", "p", "", "parent folder name for the uploaded file in the drive")
+	uploadCmd.Flags().StringVarP(&parent, "parent", "p", "", "finds the first folder named as specified and uploads the file or directory inside it")
 	rootCmd.AddCommand(uploadCmd)
 }
 

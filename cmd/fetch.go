@@ -13,10 +13,15 @@ var fetchCmd = &cobra.Command{
 	DisableFlagsInUseLine: true,
 	Aliases:               []string{"get"},
 	PreRun: func(cmd *cobra.Command, args []string) {
+		err := auth()
+		if err != nil {
+			utils.ExitOnError("Authorization error: " + err.Error())
+		}
+
 		if (file == "" && dir == "") || (file != "" && dir != "") {
 			utils.ExitOnError("You must provide either -f (file) or -d (directory), but not both")
 		}
-		if err := utils.ClearScreen(); err != nil {
+		if err = utils.ClearScreen(); err != nil {
 			utils.ExitOnError(err.Error())
 		}
 	},

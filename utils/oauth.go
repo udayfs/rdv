@@ -28,20 +28,20 @@ var (
 	port          string = "50135"
 	redirectURL   string = fmt.Sprintf("http://localhost:%s/callback", port)
 	tokenFileName string = ".rdv.json"
-	tokenFilePath string = filepath.Join(getUserHome(), tokenFileName)
+	TokenFilePath string = filepath.Join(getUserHome(), tokenFileName)
 )
 
 var Providers = []OauthProvider{
 	{
-		name:      "google",
+		name:      "gdrive",
 		clientID:  "593200518603-k0ptna6taq593eiulqnd4vfsk1djh0vl.apps.googleusercontent.com",
 		clientSec: "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",
 		endpoint:  google.Endpoint,
-		scopes:    []string{drive.DriveFileScope},
+		scopes:    []string{drive.DriveScope},
 	},
 }
 
-func getProviderConfig(provider OauthProvider) *oauth2.Config {
+func getProviderConfig(provider *OauthProvider) *oauth2.Config {
 	return &oauth2.Config{
 		ClientID:     provider.clientID,
 		ClientSecret: provider.clientSec,
@@ -80,7 +80,7 @@ func pkce() (string, string, error) {
 }
 
 func getToken() (*oauth2.Token, error) {
-	file, err := os.Open(tokenFilePath)
+	file, err := os.Open(TokenFilePath)
 	if err != nil {
 		return nil, err
 	}
@@ -104,13 +104,7 @@ func setToken(token *oauth2.Token, path string) error {
 	return json.NewEncoder(file).Encode(token)
 }
 
-func authorize(provider OauthProvider) (*http.Client, error) {
-	switch provider.name {
-	case "google":
-	default:
-		return nil, fmt.Errorf("unsupported oauth provider")
-	}
-
+func authorize(provider *OauthProvider) (*http.Client, error) {
 	oauthConfig := getProviderConfig(provider)
 
 	code_verifier, code_challenge, err := pkce()
@@ -164,7 +158,7 @@ func authorize(provider OauthProvider) (*http.Client, error) {
 		return nil, err
 	}
 
-	if err := setToken(token, tokenFilePath); err != nil {
+	if err := setToken(token, TokenFilePath); err != nil {
 		return nil, err
 	}
 
@@ -172,11 +166,23 @@ func authorize(provider OauthProvider) (*http.Client, error) {
 	return client, nil
 }
 
-func LogIn(provider OauthProvider) (*http.Client, error) {
+func LogIn(providerName string) (*http.Client, error) {
+	var provider *OauthProvider
+	for i := range Providers {
+		if Providers[i].name == providerName {
+			provider = &Providers[i]
+		}
+	}
+
+	if provider == nil {
+		return nil, fmt.Errorf("provider %s is not supported", providerName)
+	}
+
 	if token, err := getToken(); err == nil {
 		return getProviderConfig(provider).Client(context.Background(), token), nil
 	}
 
+	fmt.Println(Colorize(Yellow, "[Warn]"), "Initialize authorization flow")
 	client, err := authorize(provider)
 	if err != nil {
 		return nil, err

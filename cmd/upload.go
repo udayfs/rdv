@@ -40,7 +40,6 @@ var uploadCmd = &cobra.Command{
 		}
 	},
 	Run: func(cmd *cobra.Command, args []string) {
-		var isDir bool
 		var path string
 		var message string
 

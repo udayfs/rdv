@@ -7,13 +7,15 @@ import (
 )
 
 var (
-	file     string
-	dir      string
-	outDir   string
-	parent   string
-	parentID string
-	provider string
-	srv      *drive.Service
+	file          string
+	dir           string
+	isDir         bool
+	outDir        string
+	parent        string
+	parentID      string
+	provider      string
+	revokeSession bool
+	srv           *drive.Service
 )
 
 var rootCmd = &cobra.Command{

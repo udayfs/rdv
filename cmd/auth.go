@@ -20,12 +20,8 @@ var authCmd = &cobra.Command{
 		}
 	},
 	Run: func(cmd *cobra.Command, args []string) {
-		revoke, err := cmd.Flags().GetBool("revoke")
-		if err != nil {
-			utils.ExitOnError(err.Error())
-		}
-		if revoke {
-			_, err = os.Stat(utils.TokenFilePath)
+		if revokeSession {
+			_, err := os.Stat(utils.TokenFilePath)
 			if err != nil {
 				if os.IsNotExist(err) {
 					utils.ExitOnSuccess("User session already revoked!")
@@ -44,7 +40,7 @@ var authCmd = &cobra.Command{
 
 func init() {
 	authCmd.Flags().StringVarP(&provider, "provider", "p", "gdrive", "authorize rdv with a particular remote drive")
-	authCmd.Flags().BoolP("revoke", "r", false, "revokes existing logged in user session")
+	authCmd.Flags().BoolVarP(&revokeSession, "revoke", "r", false, "revokes existing logged in user session")
 	rootCmd.AddCommand(authCmd)
 }
 

@@ -1,0 +1,3 @@
+- Explicitly ask for file type to stored or fetched
+- Allow user to select which file/folder to download if multiple files/folder exists
+- Add msdrive support

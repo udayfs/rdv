@@ -25,6 +25,12 @@ var uploadCmd = &cobra.Command{
 			utils.ExitOnError("You must provide either -f (file) or -d (directory), but not both")
 		}
 
+		if file == "" {
+			isDir = true
+		} else {
+			isDir = false
+		}
+
 		if parent != "" {
 			q := fmt.Sprintf("mimeType='application/vnd.google-apps.folder' and name='%s' and 'root' in parents and trashed=false", parent)
 			res, err := srv.Files.List().Q(q).Fields("files(id, name)").Do()
@@ -43,12 +49,10 @@ var uploadCmd = &cobra.Command{
 		var path string
 		var message string
 
-		if file == "" {
-			isDir = true
+		if isDir {
 			path = dir
 			message = fmt.Sprintf("Uploading directory %s", filepath.Base(dir))
 		} else {
-			isDir = false
 			path = file
 			message = fmt.Sprintf("Uploading file %s", filepath.Base(file))
 		}

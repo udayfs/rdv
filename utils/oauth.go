@@ -182,7 +182,7 @@ func LogIn(providerName string) (*http.Client, error) {
 		return getProviderConfig(provider).Client(context.Background(), token), nil
 	}
 
-	fmt.Println(Colorize(Yellow, "[Warn]"), "Initialize authorization flow")
+	Warn("Initialize authorization flow")
 	client, err := authorize(provider)
 	if err != nil {
 		return nil, err

@@ -2,8 +2,13 @@ package cmd
 
 import (
 	"fmt"
+	"io"
+	"os"
+	"path/filepath"
+
 	"github.com/spf13/cobra"
 	"github.com/udayfs/rdv/utils"
+	"google.golang.org/api/drive/v3"
 )
 
 var fetchCmd = &cobra.Command{
@@ -21,6 +26,13 @@ var fetchCmd = &cobra.Command{
 		if (file == "" && dir == "") || (file != "" && dir != "") {
 			utils.ExitOnError("You must provide either -f (file) or -d (directory), but not both")
 		}
+
+		if file == "" {
+			isDir = true
+		} else {
+			isDir = false
+		}
+
 		if err = utils.ClearScreen(); err != nil {
 			utils.ExitOnError(err.Error())
 		}
@@ -29,13 +41,11 @@ var fetchCmd = &cobra.Command{
 		var message string
 		var driveFName string
 
-		if file == "" {
+		if isDir {
 			driveFName = dir
-			isDir = true
 			message = fmt.Sprintf("Fetching directory %s", dir)
 		} else {
 			driveFName = file
-			isDir = false
 			message = fmt.Sprintf("Fetching file %s", file)
 		}
 
@@ -70,8 +80,69 @@ func fetch(driveFileName string) error {
 	return err
 }
 
+func download(driveFileId string, driveFileName string) error {
+	res, err := srv.Files.Get(driveFileId).Download()
+	if err != nil {
+		return err
+	}
+
+	defer res.Body.Close()
+
+	out := filepath.Join(outDir, driveFileName)
+	outFile, err := os.Create(out)
+	if err != nil {
+		return err
+	}
+	defer outFile.Close()
+
+	_, err = io.Copy(outFile, res.Body)
+	return err
+}
+
 func fetchDriveFile(f string) error {
-	panic("unimplemented")
+	q := fmt.Sprintf("name='%s' and trashed=false", f)
+	nextPageToken := ""
+	var err error
+
+	for {
+		req := srv.Files.List().Q(q).PageSize(5).Fields("nextPageToken, files(id, name, mimeType)")
+		var res *drive.FileList
+
+		if nextPageToken != "" {
+			req = req.PageToken(nextPageToken)
+		}
+
+		res, err = req.Do()
+		if err != nil {
+			break
+		}
+
+		if len(res.Files) == 0 {
+			err = fmt.Errorf("no artifacts found with the name `%s` in the drive", f)
+		} else {
+			if len(res.Files) > 1 {
+				fmt.Println()
+				utils.Warn("Found more than one matching artifacts in the drive, attempting to fetch the first one!")
+				for _, df := range res.Files {
+					fmt.Printf("Name: %s Id: [%s] MimeType: %s\n", df.Name, df.Id, df.MimeType)
+				}
+				err = download(res.Files[0].Id, res.Files[0].Name)
+			} else {
+				err = download(res.Files[0].Id, res.Files[0].Name)
+			}
+		}
+
+		if err != nil {
+			break
+		}
+
+		if res.NextPageToken == "" {
+			break
+		}
+		nextPageToken = res.NextPageToken
+	}
+
+	return err
 }
 
 func fetchDriveFolder(fol string) error {

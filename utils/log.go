@@ -18,3 +18,7 @@ func ExitOnSuccess(message string) {
 func Info(message string) {
 	fmt.Printf("%s\n", Colorize(Gray, "[Info] ")+message)
 }
+
+func Warn(message string) {
+	fmt.Printf("%s\n", Colorize(Yellow, "[Warn] ")+message)
+}

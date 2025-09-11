@@ -2,13 +2,12 @@ package cmd
 
 import (
 	"fmt"
-	"io"
-	"os"
-	"path/filepath"
-
 	"github.com/spf13/cobra"
 	"github.com/udayfs/rdv/utils"
 	"google.golang.org/api/drive/v3"
+	"io"
+	"os"
+	"path/filepath"
 )
 
 var fetchCmd = &cobra.Command{
